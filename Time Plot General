@@ -1,0 +1,24 @@
+concepts1_prog_years <- merge(pubIDs_concepts, df_pubmed, by = "pmid") %>%
+  filter(nchar(pmid) >= 8) %>%
+  select(pmid, personID.x, progCode_bsp, topconcept_0, score_0, topconcept_1, score_1, year) %>%
+  distinct(.keep_all = TRUE) %>%
+  group_by(year, topconcept_1) |>
+  summarize(grouped_count = n()) |>
+  ungroup()|>
+  group_by(year) |>
+  arrange(desc(grouped_count), .by_group = TRUE) |>
+  ggplot() +
+  aes(x = year, y = grouped_count, color = topconcept_1) +
+  facet_wrap(~topconcept_1) +
+  geom_line(linewidth = 0.7) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(
+    x = NULL, y = "Works count",
+    title = "Top L1 Concept Popularity over Time"
+  ) +
+  scale_x_continuous(breaks = seq(2010, 2020, by = 2)) +
+  guides(color = "none") +
+  gghighlight(
+    max(grouped_count) > 50)
+
+concepts1_prog_years
