@@ -1,0 +1,16 @@
+c <- 9 #number of column where i want to start changing NAs
+repeat{
+  d <- c-3 #this was so I could change a multiple columns at once
+
+  OA_complete[ ,d] <- replace(OA_complete[ ,d], OA_complete[ ,c] > .3, NA)
+  #replaces values in column D with na IF the matching value in column C is less than 3
+
+  
+  OA_complete[ ,c] <- replace(OA_complete[ ,c], OA_complete[ ,c] > .3, NA)
+  #replaces values in column C with na IF the matching value in column C is less than 3
+
+  c <- c + 1 
+  #when the loop repeats, it moves onto the next column
+  if(c == 12){c <- c+3} #I used this code to skip columns 12-14
+  if(c > 17) #tells the loop to break at a certain column {break}
+}
