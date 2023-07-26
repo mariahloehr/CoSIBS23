@@ -1,0 +1,23 @@
+#create a word cloud for a single dept/prog, with all the concepts they publish on
+
+publications <- read.csv("/Users/svita/OneDrive/Desktop/CoSIBS/VIS Project/pubIDs_concepts.csv")
+#publications2 <- read.csv("/Users/svita/OneDrive/Desktop/CoSIBS/VIS Project/pubmed_complete2.csv")
+
+#install.packages("wordcloud")
+library(wordcloud)
+
+#this would get concepts and counts across ALL depts (to just get one dept/prog, filter by that dept/prog)
+concepts_df <- publications |>
+  filter(progCode_bsp == "CPBS") |> #only from the CPBS dept
+  group_by(topconcept_1) |>
+  summarise(count = n(),
+            .groups = 'drop')
+
+pal <- c("black", scales::brewer_pal(palette = "Set1")(5))
+set.seed(1)
+wordcloud::wordcloud(
+  concepts_df$topconcept_1,
+  concepts_df$count,
+  scale = c(2, .4),
+  colors = pal
+)
