@@ -1,0 +1,3 @@
+#These are the departments and codes I've been using for the basic science departments
+
+basic_sci_dept = data.frame(Dept = c("BCMG", "IMMB", "PHBP", "PHRM", "PATH", "BIOS", "DERM", "NEUR", "ANES", "PSYM", "CLDV", "BIOE"), name = c("Bioch. & Mol. Gen.", "Immu. & Micro.", "Physio. & Bioph.", "Pharmacology", "Pathology", "Biostatistics", "Dermatology", "Neurology", "Anesthesiology", "Psychiatry", "Cell & Dev. Bio.", "Bioengineering"))
