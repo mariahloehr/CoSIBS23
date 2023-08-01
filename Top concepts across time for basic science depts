@@ -1,0 +1,34 @@
+all_pubs_depts <- read.csv("/Users/svita/OneDrive/Desktop/CoSIBS/VIS Project/all_pubs_depts.csv")
+
+library(gghighlight)
+
+just_depts = data.frame(Dept = c("BCMG", "IMMB", "PHBP", "PHRM", "PATH", "BIOS", "DERM", "NEUR", "ANES", "PSYM", "CLDV", "BIOE"), name = c("Bioch. & Mol. Gen.", "Immu. & Micro.", "Physio. & Bioph.", "Pharmacology", "Pathology", "Biostatistics", "Dermatology", "Neurology", "Anesthesiology", "Psychiatry", "Cell & Dev. Bio.", "Bioengineering"))
+
+for(i in 1:nrow(just_depts)){
+#making a sample dataset for one program
+  current_prog <- all_pubs_depts |>
+    filter(deptCode2 == just_depts$Dept[i]) |>
+    distinct(year, topconcept_1, .keep_all = TRUE) |>
+    filter(conceptCount > 2)
+
+#create graph
+  plot <- current_prog |>
+    # select(display_name, counts_by_year) |>
+    # tidyr::unnest(counts_by_year) |>
+    # filter(year < 2022) |>
+    ggplot() +
+    aes(x = year, y = conceptCount, color = topconcept_1) +
+    #facet_wrap(~progCode_bsp) +
+    geom_line(linewidth = 0.7) +
+    scale_color_brewer(palette = "Dark2") +
+    labs(
+      x = NULL, y = "Work count",
+      title = paste("Top concepts for", just_depts$name[i], "department")) +
+    scale_x_continuous(breaks = seq(2010, 2020, by = 2)) +
+    scale_y_continuous(breaks = seq(0, 20, by = 2))+
+    guides(color = "none") +
+    gghighlight(
+      max(conceptCount) > 1)
+
+    print(plot)
+}
