@@ -1,0 +1,224 @@
+---
+title: "Research Work (new)"
+author: "Layla Jarrahy"
+date: "2023-08-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries and reading in data}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+all_data = read_csv("/Users/laylajarrahy/Desktop/CoSIBS Notes/OA_complete.csv")
+nodes = read_csv("/Users/laylajarrahy/Desktop/CoSIBS Notes/nodes_all.csv")
+pmidData = read_csv("/Users/laylajarrahy/Desktop/CoSIBS Notes/df_pubmed.csv")
+pmid_filtered_all = select(pmidData, personID, year, pmid)
+nodes_filtered_all = select(nodes, personID, year, FullName, progCode_bsp, progDesc_bsp, deptCode2, deptDesc_prim)
+joined_data_all = inner_join(nodes_filtered_all, pmid_filtered_all, by=c('personID', 'year'))
+joined_data_all
+all_working_data = left_join(all_data, joined_data_all, by=c("pmid", "personID", "year", "progCode_bsp"))
+all_working_data
+write.csv(all_working_data, "/Users/laylajarrahy/Desktop/CoSIBS Notes/file.csv", row.names=FALSE)
+basic_sci_dept = data.frame(Dept = c("BCMG", "IMMB", "PHBP", "PHRM", "PATH", "BIOS", "DERM", "NEUR", "ANES", "PSYM", "CLDV", "BIOE"), deptName = c("Bioch. & Mol. Gen.", "Immu. & Micro.", "Physio. & Bioph.", "Pharmacology", "Pathology", "Biostatistics", "Dermatology", "Neurology", "Anesthesiology", "Psychiatry", "Cell & Dev. Bio.", "Bioengineering"))
+programs = data.frame(Prog = c("CPBS", "IPHY", "IMMU", "MOLB", "PHCL", "STBB", "NRSC", "CANB", "HMGG", "CSDV", "MICB"), progName = c("Computational Bioscience", "Integrated Physiology", "Immunology", "Molecular Biology", "Pharmacology", "Structural Biology and Biochemistry", "Neuroscience", "Cancer Biology", "Human Medical Genetics and Genomics", "Cell Biology, Stem Cells, and Development", "Microbiology"))
+programs
+# data divided into rows if they have multiple departments or programs
+all_working_data_div = separate_longer_delim(all_working_data, deptCode2, delim =";")
+all_working_data_div = separate_longer_delim(all_working_data, progCode_bsp, delim =";")
+all_working_data_div = select(all_working_data_div, year, personID, pmid, progCode_bsp, topconcept0_1, topconcept1_1, FullName, deptCode2)
+# adding names 
+all_working_data_div = left_join(all_working_data_div, basic_sci_dept, by=c('deptCode2'='Dept'))
+all_working_data_div = left_join(all_working_data_div, programs, by=c('progCode_bsp'='Prog'))
+all_working_data_div
+
+write.csv(all_working_data_div, "/Users/laylajarrahy/Desktop/best_data.csv", row.names=FALSE)
+```
+
+```{r BASIC SCIENCE DEPARTMENTS: Filtering for rows in the basic science departments}
+basic_sci_data = filter(all_working_data_div, all_working_data_div$deptCode2 %in% basic_sci_dept$Dept)
+basic_sci_data
+```
+```{r Counts top 20 concepts and filters them out}
+top_con = basic_sci_data |> group_by(topconcept1_1) |>
+  count() |> arrange(desc(n))
+top_con
+top_20_con = head(top_con, 20)
+arrange(top_20_con, topconcept1_1)
+basic_sci_data1 = filter(basic_sci_data, basic_sci_data$topconcept1_1 %in% c(top_20_con$topconcept1_1))
+basic_sci_data1
+```
+```{r Creating the combined data set, assigns totals and proportions to rows, adds descriptions}
+combined_basic_sci_data1 = as.data.frame.matrix(table(basic_sci_data1$deptCode2, basic_sci_data1$topconcept1_1))
+combined_basic_sci_data1
+combined_basic_sci_data1$Dept = c("ANES", "BCMG", "BIOE", "BIOS", "CLDV", "DERM", "IMMB", "NEUR", "PATH", "PHBP", "PHRM", "PSYM")
+combined_basic_sci_data1
+combined_basic_sci_data1 = combined_basic_sci_data1 |> 
+  pivot_longer(cols=top_20_con$topconcept1_1, names_to="Concept", values_to="Score") |>
+  select(Dept, Concept, Score)
+combined_basic_sci_data1
+
+totals_bs1 = combined_basic_sci_data1 %>% group_by(Dept) %>% 
+  summarise(sum_score = sum(Score),
+            .groups = 'drop')
+combined_basic_sci_data1 = inner_join(combined_basic_sci_data1, totals_bs1, by = "Dept")
+combined_basic_sci_data1
+
+combined_basic_sci_data1$prop = (combined_basic_sci_data1$Score/combined_basic_sci_data1$sum_score)*200
+combined_basic_sci_data1
+
+combined_basic_sci_data1 = inner_join(combined_basic_sci_data1, basic_sci_dept, by = "Dept")
+combined_basic_sci_data1
+```
+```{r Assigns abbreviations} 
+abbr = select(combined_basic_sci_data1, Concept) |>
+  distinct(.keep_all=TRUE) |> arrange(Concept)
+abbr
+abbr$abbrev = c("Aud", "Biochem", "Bioinf", "Biophys", "Canc Res", "Card", "Cell Bio", "Chrom", "Comp Bio", "Endo", "Genetics", "Immu", "Int Med", "Micro", "Mol Bio", "Neuro", "Path", "Pharm", "Psych", "Vir")
+abbr
+
+combined_basic_sci_data1 = inner_join(combined_basic_sci_data1, abbr, by = "Concept")
+combined_basic_sci_data1
+```
+
+```{r Assigns word colors based on a 10% minimum}
+combined_basic_sci_data1$color = NA
+combined_basic_sci_data1$label_color = NA
+for (i in 1:nrow(combined_basic_sci_data1)) {
+  if (combined_basic_sci_data1$prop[i]<20) {
+    combined_basic_sci_data1$color[i] = "#D9D9D9"
+    combined_basic_sci_data1$label_color[i] = paste("<span style='color:", combined_basic_sci_data1$color[i], "'>", combined_basic_sci_data1$abbrev[i], "</span>", sep = "", collapse = NULL)
+  } 
+  if (combined_basic_sci_data1$prop[i]>=20) {
+    combined_basic_sci_data1$color[i] = "#1A1A1A"
+    combined_basic_sci_data1$label_color[i] = paste("<span style='color:", combined_basic_sci_data1$color[i], "'>", combined_basic_sci_data1$abbrev[i], "</span>", sep = "", collapse = NULL)
+  }
+}
+combined_basic_sci_data1
+```
+
+```{r Making the graph}
+combined_basic_sci_data1 |> 
+  ggplot() +
+  aes(fill = Dept, y = prop, x = abbrev, group = Dept) +
+  facet_wrap(~deptName) +
+  geom_hline(yintercept = c(45, 90), colour = "grey90", linewidth = 0.2) +
+  geom_segment(
+    aes(x = Concept, xend = Concept, y = 0, yend = 100),
+    color = "grey95"
+  ) +
+  geom_col(color = "grey20") +
+  coord_polar(clip = "off") +
+  theme_bw() +
+  theme(
+    plot.background = element_rect(fill = "transparent", colour = NA),
+    panel.background = element_rect(fill = "transparent", colour = NA),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks.y = element_blank()
+  ) +
+  ggtext::geom_richtext(
+    aes(y = 100, label = label_color),
+    fill = NA, label.color = NA, size = 2
+  ) +
+  scale_fill_brewer(palette = "Set3", guide = "none") +
+  labs(y = NULL, x = NULL, title = "Basic science department clocks for level 1 topics")
+```
+Switching to Program
+```{r MOVING TO PROGRAMS: Filtering for rows with programs}
+prog_data = filter(all_working_data_div, all_working_data_div$progCode_bsp!="NULL")
+prog_data
+```
+
+```{r Counts top 20 concepts and filters them out}
+top_con = prog_data |> group_by(topconcept1_1) |>
+  count() |> arrange(desc(n))
+top_con
+top_20_con = head(top_con, 20)
+arrange(top_20_con, topconcept1_1)
+prog_data = filter(prog_data, prog_data$topconcept1_1 %in% c(top_20_con$topconcept1_1))
+prog_data
+```
+
+```{r Creating the combined data set, assigns totals and proportions to rows, adds descriptions}
+combined_prog_data1 = as.data.frame.matrix(table(prog_data$progCode_bsp, prog_data$topconcept1_1))
+combined_prog_data1
+programs = arrange(programs, Prog)
+combined_prog_data1$Prog = programs$Prog
+combined_prog_data1
+combined_prog_data1 = combined_prog_data1 |> 
+  pivot_longer(cols=top_20_con$topconcept1_1, names_to="Concept", values_to="Score") |>
+  select(Prog, Concept, Score)
+combined_prog_data1
+
+totals_prog1 = combined_prog_data1 %>% group_by(Prog) %>% 
+  summarise(sum_score = sum(Score),
+            .groups = 'drop')
+combined_prog_data1 = inner_join(combined_prog_data1, totals_prog1, by = "Prog")
+combined_prog_data1
+
+combined_prog_data1$prop = (combined_prog_data1$Score/combined_prog_data1$sum_score)*200
+combined_prog_data1
+
+combined_prog_data1 = inner_join(combined_prog_data1, programs, by = "Prog")
+combined_prog_data1
+```
+```{r Assigns abbreviations} 
+abbr = select(combined_prog_data1, Concept) |>
+  distinct(.keep_all=TRUE) |> arrange(Concept)
+abbr
+abbr$abbrev = c("Anat", "Biochem", "Bioinf", "Biophys", "Canc Res", "Cell Bio", "Chrom", "Comp Bio", "Endo", "Genetics", "Immu", "Inten Care Med", "Inter Med", "Micro", "Mol Bio", "Neuro", "Onc", "Path", "Pharm", "Vir")
+abbr
+
+combined_prog_data1 = inner_join(combined_prog_data1, abbr, by = "Concept")
+combined_prog_data1
+```
+
+```{r Assigns word colors based on a 10% minimum}
+combined_prog_data1$color = NA
+combined_prog_data1$label_color = NA
+for (i in 1:nrow(combined_prog_data1)) {
+  if (combined_prog_data1$prop[i]<20) {
+    combined_prog_data1$color[i] = "#D9D9D9"
+    combined_prog_data1$label_color[i] = paste("<span style='color:", combined_prog_data1$color[i], "'>", combined_prog_data1$abbrev[i], "</span>", sep = "", collapse = NULL)
+  } 
+  if (combined_prog_data1$prop[i]>=20) {
+    combined_prog_data1$color[i] = "#1A1A1A"
+    combined_prog_data1$label_color[i] = paste("<span style='color:", combined_prog_data1$color[i], "'>", combined_prog_data1$abbrev[i], "</span>", sep = "", collapse = NULL)
+  }
+}
+combined_prog_data1
+```
+
+```{r Making the graph}
+combined_prog_data1 |> 
+  ggplot() +
+  aes(fill = Prog, y = prop, x = abbrev, group = Prog) +
+  facet_wrap(~progName) +
+  geom_hline(yintercept = c(45, 90), colour = "grey90", linewidth = 0.2) +
+  geom_segment(
+    aes(x = Concept, xend = Concept, y = 0, yend = 100),
+    color = "grey95"
+  ) +
+  geom_col(color = "grey20") +
+  coord_polar(clip = "off") +
+  theme_bw() +
+  theme(
+    plot.background = element_rect(fill = "transparent", colour = NA),
+    panel.background = element_rect(fill = "transparent", colour = NA),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks.y = element_blank()
+  ) +
+  ggtext::geom_richtext(
+    aes(y = 100, label = label_color),
+    fill = NA, label.color = NA, size = 2
+  ) +
+  scale_fill_brewer(palette = "Set3", guide = "none") +
+  labs(y = NULL, x = NULL, title = "Program clocks for level 1 topics")
+```
