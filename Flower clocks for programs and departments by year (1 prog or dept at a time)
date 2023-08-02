@@ -1,0 +1,135 @@
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+all_working_data_div
+
+prog_by_year = function(program) {
+  prog = program
+  prog_data = filter(all_working_data_div, progCode_bsp==dept)
+  top_con_prog = prog_data |> group_by(topconcept1_1) |>
+    count() |> arrange(desc(n))
+  top_20_con_prog = head(top_con_prog, 20)
+  arrange(top_20_con_prog, topconcept1_1)
+  prog_data = filter(prog_data, prog_data$topconcept1_1 %in% top_20_con_prog$topconcept1_1)
+  combined_prog_data = as.data.frame.matrix(table(prog_data$year, prog_data$topconcept1_1))
+  combined_prog_data$year = c(2010:2020)
+  combined_prog_data = combined_prog_data |> 
+    pivot_longer(cols=top_20_con_prog$topconcept1_1, names_to="Concept", values_to="Score") |>
+    select(year, Concept, Score)
+  totals_prog = combined_prog_data %>% group_by(year) %>% 
+    summarise(sum_score = sum(Score),
+              .groups = 'drop')
+  combined_prog_data = inner_join(combined_prog_data, totals_prog, by = "year")
+  combined_prog_data$prop = (combined_prog_data$Score/combined_prog_data$sum_score)*200
+  year_tot = select(combined_prog_data, year, Concept, sum_score)
+  year_tot = distinct(year_tot)
+  year_tot$title = paste(year_tot$year, year_tot$sum_score, sep = " - ")
+  combined_prog_data = inner_join(combined_prog_data, year_tot, by = c("Concept", "year", "sum_score"))
+  combined_prog_data = inner_join(combined_prog_data, concepts, by = c("Concept"="topconcept1_1"))
+  combined_prog_data$color = NA
+  combined_prog_data$label_color = NA
+  for (i in 1:nrow(combined_prog_data)) {
+    if (combined_prog_data$prop[i]<20) {
+      combined_prog_data$color[i] = "#D9D9D9"
+      combined_prog_data$label_color[i] = paste("<span style='color:", combined_prog_data$color[i], "'>", combined_prog_data$abbrev[i], "</span>", sep = "", collapse = NULL)
+    } 
+    if (combined_prog_data$prop[i]>=20) {
+      combined_prog_data$color[i] = "#1A1A1A"
+      combined_prog_data$label_color[i] = paste("<span style='color:", combined_prog_data$color[i], "'>", combined_prog_data$abbrev[i], "</span>", sep = "", collapse = NULL)
+    }
+  }
+  graph_title = paste(programs$progName[which(programs$Prog==prog)], "clocks for level 1 topics", sep = " ")
+  combined_prog_data$year_char = as.character(combined_prog_data$year)
+  combined_prog_data |> 
+    ggplot() +
+    aes(fill = year_char, y = prop, x = abbrev, group = year_char) +
+    facet_wrap(~title) +
+    geom_hline(yintercept = c(45, 90), colour = "grey90", linewidth = 0.2) +
+    geom_segment(
+      aes(x = Concept, xend = Concept, y = 0, yend = 100),
+      color = "grey95"
+    ) +
+    geom_col(color = "grey20") +
+    coord_polar(clip = "off") +
+    theme_bw() +
+    theme(
+      plot.background = element_rect(fill = "transparent", colour = NA),
+      panel.background = element_rect(fill = "transparent", colour = NA),
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks.y = element_blank()
+    ) +
+    ggtext::geom_richtext(
+      aes(y = 100, label = label_color),
+      fill = NA, label.color = NA, size = 2
+    ) +
+    scale_fill_brewer(palette = "Set3", guide = "none") +
+    labs(y = NULL, x = NULL, title = graph_title)
+}
+
+dept_by_year = function(department) {
+  dept = department
+  dept_data = filter(all_working_data_div, deptCode2==dept)
+  top_con_dept = dept_data |> group_by(topconcept1_1) |>
+    count() |> arrange(desc(n))
+  top_20_con_dept = head(top_con_dept, 20)
+  arrange(top_20_con_dept, topconcept1_1)
+  dept_data = filter(dept_data, dept_data$topconcept1_1 %in% top_20_con_dept$topconcept1_1)
+  combined_dept_data = as.data.frame.matrix(table(dept_data$year, dept_data$topconcept1_1))
+  combined_dept_data$year = c(2010:2020)
+  combined_dept_data = combined_dept_data |> 
+    pivot_longer(cols=top_20_con_dept$topconcept1_1, names_to="Concept", values_to="Score") |>
+    select(year, Concept, Score)
+  totals_dept = combined_dept_data %>% group_by(year) %>% 
+    summarise(sum_score = sum(Score),
+              .groups = 'drop')
+  combined_dept_data = inner_join(combined_dept_data, totals_dept, by = "year")
+  combined_dept_data$prop = (combined_dept_data$Score/combined_dept_data$sum_score)*200
+  year_tot = select(combined_dept_data, year, Concept, sum_score)
+  year_tot = distinct(year_tot)
+  year_tot$title = paste(year_tot$year, year_tot$sum_score, sep = " - ")
+  combined_dept_data = inner_join(combined_dept_data, year_tot, by = c("Concept", "year", "sum_score"))
+  combined_dept_data = inner_join(combined_dept_data, concepts, by = c("Concept"="topconcept1_1"))
+  combined_dept_data$color = NA
+  combined_dept_data$label_color = NA
+  for (i in 1:nrow(combined_dept_data)) {
+    if (combined_dept_data$prop[i]<20) {
+      combined_dept_data$color[i] = "#D9D9D9"
+      combined_dept_data$label_color[i] = paste("<span style='color:", combined_dept_data$color[i], "'>", combined_dept_data$abbrev[i], "</span>", sep = "", collapse = NULL)
+    } 
+    if (combined_dept_data$prop[i]>=20) {
+      combined_dept_data$color[i] = "#1A1A1A"
+      combined_dept_data$label_color[i] = paste("<span style='color:", combined_dept_data$color[i], "'>", combined_dept_data$abbrev[i], "</span>", sep = "", collapse = NULL)
+    }
+  }
+  basic_sci_dept = data.frame(Dept = c("BCMG", "IMMB", "PHBP", "PHRM", "PATH", "BIOS", "DERM", "NEUR", "ANES", "PSYM", "CLDV", "BIOE"), name = c("Bioch. & Mol. Gen.", "Immu. & Micro.", "Physio. & Bioph.", "Pharmacology", "Pathology", "Biostatistics", "Dermatology", "Neurology", "Anesthesiology", "Psychiatry", "Cell & Dev. Bio.", "Bioengineering"))
+  graph_title = paste(basic_sci_dept$name[which(basic_sci_dept$Dept==dept)], "clocks for level 1 topics", sep = " ")
+  combined_dept_data$year_char = as.character(combined_dept_data$year)
+  combined_dept_data |> 
+    ggplot() +
+    aes(fill = year_char, y = prop, x = abbrev, group = year_char) +
+    facet_wrap(~title) +
+    geom_hline(yintercept = c(45, 90), colour = "grey90", linewidth = 0.2) +
+    geom_segment(
+      aes(x = Concept, xend = Concept, y = 0, yend = 100),
+      color = "grey95"
+    ) +
+    geom_col(color = "grey20") +
+    coord_polar(clip = "off") +
+    theme_bw() +
+    theme(
+      plot.background = element_rect(fill = "transparent", colour = NA),
+      panel.background = element_rect(fill = "transparent", colour = NA),
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks.y = element_blank()
+    ) +
+    ggtext::geom_richtext(
+      aes(y = 100, label = label_color),
+      fill = NA, label.color = NA, size = 2
+    ) +
+    scale_fill_brewer(palette = "Set3", guide = "none") +
+    labs(y = NULL, x = NULL, title = graph_title)
+}
