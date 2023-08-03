@@ -1,0 +1,170 @@
+library(openalexR)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(data.table)
+library(forcats)
+
+pubmed <- read.csv("/Users/machaango/OneDrive/Desktop/r/csvs/df_pubmed.csv")
+authors <- read.csv("/Users/machaango/OneDrive/Desktop/r/csvs/nodes_all.csv")
+
+#here select the node (author) columns you want
+authors <- authors %>% 
+  select(personID, progCode_bsp)
+#^in theory i would add department code here but yall can join that in later these codes are FUCKED up
+
+#selecting columns we want from the pubmed file
+pubmed <- pubmed %>% 
+  select(row_id, year, personID, pmid) %>%  #43821 obs. total
+  right_join(authors, by = c("personID")) |>
+  distinct(.keep_all = TRUE)
+
+#copying error rows to new df for carsten to look at later
+#(if other rows have errors they will b added here w their errors listed)
+errors <- pubmed %>%
+  filter(pmid < 10000000) %>%
+  mutate(where_error = "pmid") #lost 72 obs.
+
+#removing known error rows from main df + setting up columns for openalex transfer
+pubmed <- pubmed %>% 
+  filter(pmid > 9999999) %>%  #43729 obs. remain
+  mutate(topconcept0_1 = "",
+         topconcept0_2 = "",
+         topconcept0_3 = "",
+
+
+          score0_1 = "",
+          score0_2 = "",
+          score0_3 = "",
+
+         topconcept1_1 = "",
+         topconcept1_2 = "",
+         topconcept1_3 = "",
+
+          
+         score1_1 = "",
+         score1_2 = "",
+         score1_3 = ""
+         )
+ 
+pubmed_backup <- pubmed
+
+na <- c(NA, NA, NA)
+
+for(i in 59789:nrow(pubmed)){
+#for(i in 1:30){
+  pid = pubmed$pmid[i]
+  
+error <- paste0("row ", i, " incomplete but finished")
+out <- paste0("row ", i, " done!")
+
+paper_data <- oa_fetch(
+  entity = "works",
+  ids.pmid = pid,
+  verbose = FALSE)
+#fetches openalex data based on pmid
+ 
+  
+pubmed$topconcept0_1[i] <- ifelse(length(paper_data) != 30, 
+                             "failed fetch", "fetch error") 
+#ideally these are overwritten but they will let us know if something went wrong
+
+ if (is.null(paper_data) == "TRUE")
+ {message(error)
+   next}
+
+ if (nrow(paper_data) != 1)
+ {message(error)
+   next}
+#if there is no paper data, end the for loop early and skip to the next line (for pmids that dont work)
+
+
+paper_data  <- as.data.frame(paper_data$concepts)
+#extracts the openalex concepts data and puts it in its own dataframe
+
+
+concepts_0 <- paper_data %>% filter(level == 0) %>% 
+  arrange(desc(score)) %>% 
+  slice_head(n = 3)
+
+concepts_1 <- paper_data %>% filter(level == 1) %>% 
+  arrange(desc(score)) %>% 
+  slice_head(n = 3)
+#separates the lv 1 and lv 0 concepts into their own df
+
+if (length(concepts_0$level) <= 0){
+  pubmed[i, c(6,7,8)] <- na
+  pubmed[i, c(9,10,11)] <- na
+  message(error)} #if no concepts, NA for all
+else if (nrow(concepts_0) == 1){
+  concepts_0 <- concepts_0 %>% add_row(level = 0) %>% add_row(level = 0)
+  pubmed[i, c(6,7,8)] <- as.list(concepts_0$display_name)
+  pubmed[i, c(9,10,11)] <- as.list(concepts_0$score)} #if 1/3 concept, add blank rows before adding to main df
+else if (nrow(concepts_0) == 2){
+  concepts_0 <- concepts_0 %>% add_row(level = 0)
+  pubmed[i, c(6,7,8)] <- as.list(concepts_0$display_name)
+  pubmed[i, c(9,10,11)] <- as.list(concepts_0$score)} #if 2/3 concepts, add blank row before adding to main df
+else if (nrow(concepts_0) == 3){
+  pubmed[i, c(6,7,8)] <- as.list(concepts_0$display_name)
+  pubmed[i, c(9,10,11)] <- as.list(concepts_0$score)} #if 3/3 concepts, just add to main df
+
+if (length(concepts_1$level) <= 0){
+  pubmed[i, c(12,13,14)] <- na
+  pubmed[i, c(15,16,17)] <- na
+  message(error)} #if no concepts, NA for all
+else if (nrow(concepts_1) == 1){
+  concepts_1 <- concepts_1 %>% add_row(level = 1) %>% add_row(level = 1)
+  pubmed[i, c(12,13,14)] <- as.list(concepts_1$display_name)
+  pubmed[i, c(15,16,17)] <- as.list(concepts_1$score)} #if 1/3 concept, add blank rows before adding to main df
+else if (nrow(concepts_1) == 2){
+  concepts_1 <- concepts_1 %>% add_row(level = 1)
+  pubmed[i, c(12,13,14)] <- as.list(concepts_1$display_name)
+  pubmed[i, c(15,16,17)] <- as.list(concepts_1$score)} #if 2/3 concepts, add blank row before adding to main df
+else if (nrow(concepts_1) == 3){
+  pubmed[i, c(12, 13, 14)] <- as.list(concepts_1$display_name)
+  pubmed[i, c(15, 16, 17)] <- as.list(concepts_1$score)} #if 3/3 concepts, just add to main df
+
+message(out) 
+#tells what row was completed so we can turn off verbose
+
+Sys.sleep(0.1)
+#ensures the loop can't run fast enough to time out the openalex api
+#you can set it smaller so it runs faster but after a certain point you risk timing out
+}
+
+print("all done!")
+
+errors2 <- pubmed %>% 
+  filter(topconcept0_1 == "fetch error" | topconcept0_1 == "failed fetch") %>% 
+  rename(where_error = topconcept0_1) %>% 
+  select(1:6)
+errors <- bind_rows(errors2, errors)
+fwrite(errors, file ="errors_final.csv")
+#separates & saves errors for carsten to look at later
+
+pubmed <- pubmed %>% 
+  filter(!(topconcept0_1 == "fetch error" | topconcept0_1 == "failed fetch"))
+#saves good data to dataframe
+
+fwrite(pubmed, file = "OA_complete.csv")
+#the for loop fucked up the structure so we can't use write.csv
+#however if we save it as a csv and then load it back in, the structure will be fine
+#the problem is that it replaces NAs with blanks so we have to load it back in, change NAs, then save it as a csv again lol
+OA_complete <- read.csv("/Users/machaango/OneDrive/Desktop/r/csvs/OA_complete.csv")
+#load the df back in but this time the vector/list thing is solved
+
+c <- 6     
+repeat{
+  OA_complete[ ,c] <- replace(OA_complete[ ,c], OA_complete[ ,c] == "" , NA)
+
+  c <- c + 1
+  if(c == 9){c <- c+3}
+  if(c > 14) {break}
+}
+#replace blanks with NAs
+
+write.csv(OA_complete, file = "/Users/machaango/OneDrive/Desktop/r/csvs/OA_complete3.csv")
+#now we can save it as a csv but with the NAs properly formatted
+
+OA_complete <- read.csv("/Users/machaango/OneDrive/Desktop/r/csvs/OA_complete3.csv")
+#woohoo ! !
