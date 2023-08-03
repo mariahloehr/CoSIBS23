@@ -1,0 +1,15 @@
+#which file do i use?
+
+#most recent versions:
+#top concepts for PAPERS (complete OA + GAIA dataset + top 3 concepts for each paper)
+OA_complete <- read.csv ("path/OA_complete3.csv")
+
+#top concepts for AUTHORS (derived author data-- ALL top 3 concepts for authors)
+author_concepts <- read.csv ("path/author_concepts2.csv")
+
+#top concepts for KALEIDONETS (derived and FILTERED author data-- top 3 concepts for authors but only the most frequent ones)
+OA_shiny <- read.csv ("path/OAconcepts_shiny.csv")
+
+#any other topconcepts/pubmed csvs have errors/formatting/missing values
+# + some of them are limited datasets from when we were working with only the top 9 departments/the incomplete author data i sent carsten
+#dont use those!!
