@@ -1,0 +1,112 @@
+author_concepts <- read.csv("/Users/machaango/OneDrive/Desktop/r/csvs/author_concepts2.csv")
+
+OA_shiny <- author_concepts %>% 
+  separate_wider_delim(top0, delim = ";", names = c("concept0_1", "concept0_2", "concept0_3"), too_few = "align_start") %>% 
+  separate_wider_delim(top1, delim = ";", names = c("concept1_1", "concept1_2", "concept1_3"), too_few = "align_start") %>% 
+  select(!(c(all0, all1, prop0, prop1, paper_count, count0, count1)))
+#separates the concepts into their own column
+#looking at my past data, concepts in 0 position have more papers, whereas those in position 3 have less
+#when tied they just go alphabetically
+
+
+c <- 2     
+repeat{
+  OA_shiny[ ,c] <- replace(OA_shiny[ ,c], OA_shiny[ ,c] == "" , NA)
+
+  c <- c + 1
+  if(c > 7) {break}
+}
+#replaces all blanks with NAs
+
+tab01 <- as.data.frame(table(OA_shiny$concept0_1)) %>% arrange(desc(Freq)) %>% mutate(name = "1st for Lv 0", level = "01")
+tab02 <- as.data.frame(table(OA_shiny$concept0_2)) %>% arrange(desc(Freq)) %>% mutate(name = "2nd for Lv 0", level = "02")
+tab03 <- as.data.frame(table(OA_shiny$concept0_3)) %>% arrange(desc(Freq)) %>% mutate(name = "3rd for Lv 0", level = "03")
+tab11 <- as.data.frame(table(OA_shiny$concept1_1)) %>% arrange(desc(Freq)) %>% mutate(name = "1st for Lv 1", level = "11")
+tab12 <- as.data.frame(table(OA_shiny$concept1_2)) %>% arrange(desc(Freq)) %>% mutate(name = "2nd for Lv 1", level = "12")
+tab13 <- as.data.frame(table(OA_shiny$concept1_3)) %>% arrange(desc(Freq)) %>% mutate(name = "3rd for Lv 1", level = "13")
+#ranks concepts by the number of authors who have it in their top 3 for each position
+
+
+concepts_table <- bind_rows(tab01, tab02, tab03, tab11, tab12, tab13) %>% 
+  rename(concept = Var1,
+         count = Freq)
+#makes it into one big table so we dont have to rewrite the code each time
+
+rm(tab01, tab02, tab03, tab11, tab12, tab13, c)
+#gets rid of the separate tables so they stop clogging up my environment
+
+
+OA_shiny %>% summarize(
+  L0_1 = sum(!is.na(OA_shiny$concept0_1)),
+  L0_2 = sum(!is.na(OA_shiny$concept0_2)),
+  L0_3 = sum(!is.na(OA_shiny$concept0_3)))
+#this just shows why we got rid of the lv 0-- there are way too many NAs in the 2nd and 3rd positions
+#for reference: out of 4484 total papers, 4483 (99%) have a 1st lv 0 concept, 3193 (72%) have a 2nd, and 1688 (37%) have a 3rd
+
+as.data.frame(table(OA_shiny$concept0_1)) %>% arrange(desc(Freq))
+concepts_table %>%
+  filter(level == "01") %>%
+  mutate(concept = fct_reorder(concept, count)) %>%
+  slice_head(n = 16) %>%
+  ggplot(mapping = aes(x = concept)) +
+  geom_bar(aes(weight = count), fill = "thistle4")+
+  facet_wrap(~ name)+
+  coord_flip()+
+  xlab("Concept")+
+  ylab("Paper Counts")
+#makes a bar graph of the no. of authors with a concept at a position (replace the filter to see different positions/levels)
+#additionally this shows why we dropped lv 0 overall: the lack of variety in lv 0 concepts makes it unlikely to show us anything of interest
+#for reference: of 4484 total authors, 2271 (50%) have biology as their top 1, 1519 (34%) have medicine and the other 15% is any other concept
+
+OA_shiny <- OA_shiny %>%
+  select(!(2:4))
+#removes lv 0 concepts (see reasoning above)
+
+concepts_table %>%
+  filter(level == "12") %>% 
+  arrange(desc(count)) %>% 
+  slice_head(n = 9)
+#this pulls up the list of top 9 concepts we DO want to keep-- use this list to verify we replaced the right things after running the next code
+
+###
+
+top_9 <- concepts_table %>%
+  filter(level == "13") %>% 
+  arrange(desc(count)) %>% 
+  slice(-(1:9))
+#takes any concepts NOT in the top 9 for a specific level and position
+#we want the ones NOT in the top 9 because we will use this vector to replace them with NAs
+
+OA_shiny$concept1_1 <- replace(OA_shiny$concept1_1, OA_shiny$concept1_1 %in% top_9$concept, NA)
+OA_shiny$concept1_2 <- replace(OA_shiny$concept1_2, OA_shiny$concept1_2 %in% top_9$concept, NA)
+OA_shiny$concept1_3 <- replace(OA_shiny$concept1_3, OA_shiny$concept1_3 %in% top_9$concept, NA)
+#replaces concepts NOT in the top 9 with NAs
+#rerun this code for each position (replace filter == "11/12/13" and concept1_1/2/3)
+
+##
+
+OA_shiny %>% summarize(
+  L1_1 = sum(!is.na(OA_shiny$concept1_1)),
+  L1_2 = sum(!is.na(OA_shiny$concept1_2)),
+  L1_3 = sum(!is.na(OA_shiny$concept1_3)))
+#retention is better here:
+#of 4484, 2985 (67%) authors have 1st concepts, 2442 (54%) have 2nd, and 1800 (40%)	have 3rd.
+
+NAs <- as.data.frame(is.na(OA_shiny)) %>% 
+  select(!(1))
+NAs$concept1_1 <- replace(NAs$concept1_1, NAs$concept1_1 == "TRUE", 1)
+NAs$concept1_2 <- replace(NAs$concept1_2, NAs$concept1_2 == "TRUE", 1)
+NAs$concept1_3 <- replace(NAs$concept1_3, NAs$concept1_3 == "TRUE", 1)
+NAs <- NAs %>% mutate(
+  missing = concept1_1+concept1_2+concept1_3)
+table(NAs$missing)
+#this is to see how many NAs authors tend to have
+#here we see that 1019 are missing 0 concepts, 1554 are missing 1, 1062 are missing 2, and 849 are missing all concepts
+#not super useful bc i forgot to take the counts of stuff
+
+
+write.csv(OA_shiny, file = "/Users/machaango/OneDrive/Desktop/r/csvs/top9_concepts.csv")
+#remembered to use write.csv this time lol
+
+test <- read.csv("/Users/machaango/OneDrive/Desktop/r/csvs/top9_concepts.csv")
+#testing to make sure it saved right lol
