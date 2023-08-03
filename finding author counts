@@ -1,0 +1,117 @@
+OA_complete <- read.csv("/Users/machaango/OneDrive/Desktop/r/csvs/OA_complete3.csv")
+
+#replaces NA w zero in score columns (this is so that the score < 3 code doesn't break)
+c <- 9     
+repeat{
+  OA_complete[ ,c] <- as.numeric(OA_complete[ ,c])
+
+  OA_complete[ ,c] <- OA_complete[ ,c] %>% replace_na(0)
+
+  c <- c + 1
+  if(c == 12){c <- c+3}
+  if(c > 17) {break}
+  }
+
+#if a concepts score is < 0.3, both score and concept get replaced with NA (removes concepts below threshold)
+c <- 9
+repeat{
+  d <- c-3
+
+  OA_complete[ ,d] <- replace(OA_complete[ ,d], OA_complete[ ,c] < .3, NA)
+  OA_complete[ ,c] <- replace(OA_complete[ ,c], OA_complete[ ,c] < .3, NA)
+  
+  c <- c + 1
+  if(c == 12){c <- c+3}
+  if(c > 17) {break}
+}
+
+author_data <- OA_complete %>% 
+  group_by(personID) %>%
+  summarize(all0 = paste(topconcept0_1, topconcept0_2, topconcept0_3, sep = ";", collapse = ";"),
+            all1 = paste(topconcept1_1, topconcept1_2, topconcept1_3, sep = ";", collapse = ";"),
+            paper_count = n())
+#makes new dataframe about author data
+#saves all concepts for all of an author's papers in a row (semicolon separated) 
+
+author_data <- author_data %>% 
+    mutate(top0 = "",
+           count0 = "",
+           prop0 = "",
+           top1 = "",
+           count1 = "",
+           prop1 = "")
+#adds extra columns for use later
+#in theory i write the code so they're in the order we want them in already but im lazy so ill just reorder them later
+
+#level 0 for loop
+for(i in 1:nrow(author_data)){
+  string <- toString(author_data$all0[i]) 
+  split <- unlist(strsplit(string, split=";"))
+  split<-split[!split == "NA"]
+  split<-split[!is.na(split)]
+
+  author_data[i, 2] <- paste(as.list(split), collapse = ";")
+  number <- as.numeric(toString(author_data[i, 4]) )
+  
+  table <- as.data.frame(table(split))
+  table <- table %>% 
+    arrange(desc(Freq)) %>% 
+    slice_head(n = 3)
+
+  if (nrow(table) >= 1){
+    table <- table %>% mutate(prop = (Freq)/number)
+    author_data[i, 7] <- paste(table$prop, collapse = ";")
+  }
+
+  author_data[i, 5] <- paste(table$split, collapse = ";")
+  author_data[i, 6] <- paste(table$Freq, collapse = ";")
+  
+  out <- paste0("author at row ", i, " done!")
+  message(out)
+}
+
+print ("all done!")
+
+#level 1 for loop
+for(i in 1:nrow(author_data)){
+  string <- toString(author_data$all1[i])
+  split <- unlist(strsplit(string, split=";"))
+  split<-split[!split == "NA"]
+  split<-split[!is.na(split)]
+
+  author_data[i, 3] <- paste(as.list(split), collapse = ";")
+  number <- as.numeric(toString(author_data[i, 4]) )
+  
+  table <- as.data.frame(table(split))
+  table <- table %>% 
+    arrange(desc(Freq)) %>% 
+    slice_head(n = 3)
+
+  if (nrow(table) >= 1){
+    table <- table %>% mutate(prop = (Freq)/number)
+    author_data[i, 10] <- paste(table$prop, collapse = ";")
+  }
+
+  author_data[i, 8] <- paste(table$split, collapse = ";")
+  author_data[i, 9] <- paste(table$Freq, collapse = ";")
+  
+  out <- paste0("author at row ", i, " done!")
+  message(out)
+}
+
+#replaces any blanks with NAs
+c <- 2     
+repeat{
+  author_data[ ,c] <- replace(author_data[ ,c], author_data[ ,c] == "" , NA)
+
+  c <- c + 1
+  if(c > 10) {break}
+}
+
+
+#reoders columns to a nicer order
+author_data <- author_data[, c(1, 4, 2, 5, 6, 7, 3, 8, 9, 10)]
+fwrite(author_data, file = "author_concepts2.csv")
+
+#i think using write.csv might be better here but fwrite works fine i think?? 
+#if write.csv works use that but otherwise fwrite works fine
